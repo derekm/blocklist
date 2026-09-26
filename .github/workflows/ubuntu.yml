@@ -31,13 +31,22 @@ jobs:
       - name: Bootstrap
         run: (cd port && autoreconf -fi)
       - name: Configure
-        run: (cd port && ./configure --prefix=/usr --sysconfdir=/etc --with-pf-backend=nft)
+        run: |
+          cd port && ./configure --prefix=/usr --sysconfdir=/etc \
+            --runstatedir=/run/blocklistd --with-pf-backend=nft
       - name: Build
         run: make -C port -j2
       - name: Helper syntax
         run: sh -n libexec/blocklistd-helper
       - name: Binaries exist
         run: test -x port/blocklistd && test -x port/blocklistctl && test -x port/.libs/blocklistd
+      - name: Unit uses RuntimeDirectory not mkdir /run
+        run: |
+          grep -q '^RuntimeDirectory=blocklistd' etc/systemd/blocklistd.service
+          grep -q '^StateDirectory=blocklistd' etc/systemd/blocklistd.service
+          grep -q -- '-d -r -s /run/blocklistd/blocklistd.sock' etc/systemd/blocklistd.service
+          ! grep -q '/var/db' etc/systemd/blocklistd.service
+          ! grep -q 'ListenDatagram=' etc/systemd/blocklistd.service
 
   build-iptables:
     name: 'Ubuntu iptables backend (sanity only)'

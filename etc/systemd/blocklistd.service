@@ -7,14 +7,25 @@ Before=ssh.service racoon2.target iked.service
 
 [Service]
 Type=simple
-ExecStartPre=/usr/bin/install -d -m 0755 /var/db /run
-ExecStartPre=/bin/sh -c 'command -v nft >/dev/null && nft list table inet blocklistd >/dev/null 2>&1 || nft -f /usr/share/examples/blocklistd/blocklistd.nft || true'
-ExecStart=/usr/sbin/blocklistd -r
+# -d stays in the foreground (no daemon(0,0)/pidfile). Required for Type=simple.
+# No ListenDatagram= socket unit: bl_create() connect-probes the path then bind()
+# a SOCK_DGRAM AF_UNIX; an inherited fd looks like another owner.
+RuntimeDirectory=blocklistd
+RuntimeDirectoryMode=0755
+StateDirectory=blocklistd
+StateDirectoryMode=0750
+ExecStartPre=/bin/sh -c 'command -v nft >/dev/null && nft list table inet blocklistd >/dev/null 2>&1 || nft -f /usr/share/examples/blocklistd.nft || true'
+ExecStart=/usr/sbin/blocklistd -d -r -s /run/blocklistd/blocklistd.sock -D /var/lib/blocklistd/blocklistd.db
 ExecReload=/bin/kill -HUP $MAINPID
 Restart=on-failure
+RestartSec=2s
+PrivateTmp=yes
+ProtectSystem=strict
+ReadWritePaths=/var/lib/blocklistd /run/blocklistd
 AmbientCapabilities=CAP_NET_ADMIN CAP_NET_RAW
-CapabilityBoundingSet=CAP_NET_ADMIN CAP_NET_RAW CAP_DAC_OVERRIDE CAP_SETUID CAP_SETGID
-NoNewPrivileges=false
+CapabilityBoundingSet=CAP_NET_ADMIN CAP_NET_RAW
+NoNewPrivileges=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK
 
 [Install]
 WantedBy=multi-user.target

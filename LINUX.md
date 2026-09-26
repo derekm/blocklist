@@ -49,7 +49,7 @@ This branch makes the packet-filter backend an explicit XOR too:
 | Cross-platform compile | autoconf + `AC_CANONICAL_HOST` + subdir configures | `port/configure.ac` + `AC_REPLACE_FUNCS` + libdb |
 | Linux-only backend | `lib/if_xfrm.c` | nftables sets in `blocklistd-helper` + `etc/nftables/blocklistd.nft` |
 | Compat backend | Linux `AF_KEY` pfkey | iptables chain (existing stub, not the default) |
-| Init | systemd units, paths resolved at configure | `etc/systemd/blocklistd.service` |
+| Init | systemd units + `RuntimeDirectory` | `etc/systemd/blocklistd.service` (`RuntimeDirectory`/`StateDirectory`) |
 | CI | Ubuntu xfrm + pfkey jobs | Ubuntu nft + iptables jobs |
 | What is *not* XOR'd | IKE parser, admin socket | `libblocklist`, `blocklistd`, `blocklistctl`, `blocklistd.conf` |
 
@@ -64,17 +64,34 @@ sudo apt-get install autoconf automake libtool pkg-config gcc make libdb-dev
 cd port
 autoreconf -fi
 ./configure --prefix=/usr --sysconfdir=/etc --localstatedir=/var \
-            --runstatedir=/run --with-pf-backend=nft
+            --runstatedir=/run/blocklistd --with-pf-backend=nft
 make -j$(nproc)
 sudo make install
-sudo install -d /var/db /run
 sudo cp ../etc/blocklistd.conf.linux /etc/blocklistd.conf
-sudo nft -f ../etc/nftables/blocklistd.nft
 sudo systemctl enable --now blocklistd
 ```
 
-`blocklistd` restores rules from `/var/db/blocklistd.db` when started
-with `-r` (the unit file does this).
+`--runstatedir=/run/blocklistd` compiles `_PATH_BLSOCK` to
+`/run/blocklistd/blocklistd.sock` so `libblocklist` (iked, sshd, …)
+matches the unit. Do not leave clients on `/run/blocklistd.sock`.
+
+The unit is `Type=simple` and starts `blocklistd -d -r`:
+
+- `-d` stays in the foreground (no `daemon(0,0)` / pidfile). Required
+  so systemd's MAINPID is the real process.
+- `-r` restores nft elements from the state db.
+- `RuntimeDirectory=blocklistd` → `/run/blocklistd` (socket).
+- `StateDirectory=blocklistd` → `/var/lib/blocklistd` (db).
+- `ExecStart` passes `-s` / `-D` to those paths explicitly.
+
+There is **no** `blocklistd.socket`. `bl_create()` connect-probes the
+path then `bind()`s a `SOCK_DGRAM` `AF_UNIX`; an inherited `LISTEN_FDS`
+looks like another daemon already owns it. Copy racoon2's
+`RuntimeDirectory`, not `iked.socket` (that one exists to bind UDP/500).
+
+`PrivateTmp=yes` and `ProtectSystem=strict` are on. Do not set
+`PrivateUsers=` or `DynamicUser=`: the helper runs `nft` and needs the
+host net ns plus `CAP_NET_ADMIN`.
 
 ## Helper contract (unchanged)
 
