@@ -40,13 +40,17 @@ jobs:
         run: sh -n libexec/blocklistd-helper
       - name: Binaries exist
         run: test -x port/blocklistd && test -x port/blocklistctl && test -x port/.libs/blocklistd
-      - name: Unit uses RuntimeDirectory not mkdir /run
+      - name: Units use RuntimeDirectory + ListenDatagram socket
         run: |
           grep -q '^RuntimeDirectory=blocklistd' etc/systemd/blocklistd.service
           grep -q '^StateDirectory=blocklistd' etc/systemd/blocklistd.service
+          grep -q '^Requires=blocklistd.socket' etc/systemd/blocklistd.service
+          grep -q '^Also=blocklistd.socket' etc/systemd/blocklistd.service
           grep -q -- '-d -r -s /run/blocklistd/blocklistd.sock' etc/systemd/blocklistd.service
           ! grep -q '/var/db' etc/systemd/blocklistd.service
-          ! grep -q 'ListenDatagram=' etc/systemd/blocklistd.service
+          grep -q '^ListenDatagram=/run/blocklistd/blocklistd.sock' etc/systemd/blocklistd.socket
+          grep -q 'bl_take_listen_fd' lib/bl.c
+          grep -q 'LISTEN_FDS' lib/bl.c
 
   build-iptables:
     name: 'Ubuntu iptables backend (sanity only)'
