@@ -4,6 +4,11 @@ This package contains library that can be used by network daemons to
 communicate with a packet filter via a daemon to enforce opening and
 closing ports dynamically based on policy.
 
+On Linux use the portable tree in port/ (autoconf) plus the Linux
+packet-filter XOR documented in LINUX.md. Default helper backend is
+nftables sets; iptables is the compat path. systemd unit:
+etc/systemd/blocklistd.service. IKE/racoon2 glue sketch: diff/iked.diff.
+
 The interface to the packet filter is in libexec/blocklistd-helper
 (this is currently designed for npf) and the configuration file
 (inspired from inetd.conf) is in etc/blocklistd.conf.
@@ -20,6 +25,7 @@ Patches to various daemons to add blocklisting capabilities are in the
     - OpenSSH: diff/ssh.diff [tcp socket example]
     - Bind: diff/named.diff [both tcp and udp]
     - ftpd: diff/ftpd.diff [tcp]
+    - racoon2 iked: diff/iked.diff [UDP/500+4500 sketch]
 
 These patches have been applied to NetBSD-current.
 
