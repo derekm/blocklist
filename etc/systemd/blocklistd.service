@@ -1,0 +1,20 @@
+[Unit]
+Description=blocklistd - dynamic packet-filter bans from daemon notifications
+Documentation=https://github.com/derekm/blocklist/blob/linux-port/LINUX.md
+After=network-pre.target nftables.service
+Wants=nftables.service
+Before=ssh.service racoon2.target iked.service
+
+[Service]
+Type=simple
+ExecStartPre=/usr/bin/install -d -m 0755 /var/db /run
+ExecStartPre=/bin/sh -c 'command -v nft >/dev/null && nft list table inet blocklistd >/dev/null 2>&1 || nft -f /usr/share/examples/blocklistd/blocklistd.nft || true'
+ExecStart=/usr/sbin/blocklistd -r
+ExecReload=/bin/kill -HUP $MAINPID
+Restart=on-failure
+AmbientCapabilities=CAP_NET_ADMIN CAP_NET_RAW
+CapabilityBoundingSet=CAP_NET_ADMIN CAP_NET_RAW CAP_DAC_OVERRIDE CAP_SETUID CAP_SETGID
+NoNewPrivileges=false
+
+[Install]
+WantedBy=multi-user.target

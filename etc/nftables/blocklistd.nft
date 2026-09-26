@@ -1,0 +1,21 @@
+#!/usr/sbin/nft -f
+# Drop banned IKE / SSH / etc. peers before the rest of inet filter.
+# Loaded by blocklistd-helper on first add if the table is missing.
+
+table inet blocklistd {
+	set banned4 {
+		type ipv4_addr
+		flags timeout,interval
+		timeout 1h
+	}
+	set banned6 {
+		type ipv6_addr
+		flags timeout,interval
+		timeout 1h
+	}
+	chain input {
+		type filter hook input priority filter - 10; policy accept
+		ip  saddr @banned4 counter drop
+		ip6 saddr @banned6 counter drop
+	}
+}

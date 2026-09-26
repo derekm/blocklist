@@ -1,0 +1,11 @@
+# Linux example. UDP/500 and UDP/4500 are IKE / NAT-T (racoon2 iked).
+# type dgram because IKE is not an accepted TCP fd.
+[local]
+ssh             stream  tcp     *       blocklistd      5       1h
+ssh             stream  tcp6    *       blocklistd      5       1h
+isakmp          dgram   udp     *       blocklistd      8       1h
+4500            dgram   udp     *       blocklistd      8       1h
+500             dgram   udp     *       blocklistd      8       1h
+
+[remote]
+# 10.0.0.0/8     *       *       *       *               *       *
