@@ -1,0 +1,18 @@
+[Unit]
+Description=blocklistd control socket
+Documentation=https://github.com/derekm/blocklist/blob/linux-port/LINUX.md
+PartOf=blocklistd.service
+Before=blocklistd.service ssh.service racoon2.target iked.service
+
+[Socket]
+# SOCK_DGRAM AF_UNIX. systemd binds this before the service starts so
+# iked/sshd can connect() even if blocklistd has not finished -r restore.
+# SocketMode matches the historical umask(0) bind in bl_create().
+ListenDatagram=/run/blocklistd/blocklistd.sock
+SocketMode=0666
+DirectoryMode=0755
+RemoveOnStop=true
+Service=blocklistd.service
+
+[Install]
+WantedBy=sockets.target

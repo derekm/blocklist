@@ -7,7 +7,8 @@ exampledir = $(datarootdir)/examples
 example_DATA = $(srcdir)/../etc/blocklistd.conf $(srcdir)/../etc/npf.conf $(srcdir)/../etc/ipf.conf \
 	$(srcdir)/../etc/blocklistd.conf.linux $(srcdir)/../etc/nftables/blocklistd.nft
 systemdsystemunitdir = /lib/systemd/system
-dist_systemdsystemunit_DATA = $(srcdir)/../etc/systemd/blocklistd.service
+dist_systemdsystemunit_DATA = $(srcdir)/../etc/systemd/blocklistd.service \
+	$(srcdir)/../etc/systemd/blocklistd.socket
 
 sbin_PROGRAMS = blocklistd blocklistctl
 noinst_PROGRAMS = srvtest cltest

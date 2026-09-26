@@ -1,15 +1,16 @@
 [Unit]
 Description=blocklistd - dynamic packet-filter bans from daemon notifications
 Documentation=https://github.com/derekm/blocklist/blob/linux-port/LINUX.md
-After=network-pre.target nftables.service
+After=network-pre.target nftables.service blocklistd.socket
 Wants=nftables.service
+Requires=blocklistd.socket
 Before=ssh.service racoon2.target iked.service
 
 [Service]
 Type=simple
 # -d stays in the foreground (no daemon(0,0)/pidfile). Required for Type=simple.
-# No ListenDatagram= socket unit: bl_create() connect-probes the path then bind()
-# a SOCK_DGRAM AF_UNIX; an inherited fd looks like another owner.
+# blocklistd.socket hands the SOCK_DGRAM AF_UNIX fd via LISTEN_FDS;
+# bl_create() takes it and skips the connect-probe/bind.
 RuntimeDirectory=blocklistd
 RuntimeDirectoryMode=0755
 StateDirectory=blocklistd
@@ -29,3 +30,4 @@ RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK
 
 [Install]
 WantedBy=multi-user.target
+Also=blocklistd.socket
