@@ -49,7 +49,7 @@ This branch makes the packet-filter backend an explicit XOR too:
 | Cross-platform compile | autoconf + `AC_CANONICAL_HOST` + subdir configures | `port/configure.ac` + `AC_REPLACE_FUNCS` + libdb |
 | Linux-only backend | `lib/if_xfrm.c` | nftables sets in `blocklistd-helper` + `etc/nftables/blocklistd.nft` |
 | Compat backend | Linux `AF_KEY` pfkey | iptables chain (existing stub, not the default) |
-| Init | systemd units + `RuntimeDirectory` | `etc/systemd/blocklistd.service` (`RuntimeDirectory`/`StateDirectory`) |
+| Init | systemd units + `RuntimeDirectory` | `etc/systemd/blocklistd.service` + `blocklistd.socket` |
 | CI | Ubuntu xfrm + pfkey jobs | Ubuntu nft + iptables jobs |
 | What is *not* XOR'd | IKE parser, admin socket | `libblocklist`, `blocklistd`, `blocklistctl`, `blocklistd.conf` |
 
@@ -68,7 +68,7 @@ autoreconf -fi
 make -j$(nproc)
 sudo make install
 sudo cp ../etc/blocklistd.conf.linux /etc/blocklistd.conf
-sudo systemctl enable --now blocklistd
+sudo systemctl enable --now blocklistd.socket blocklistd.service
 ```
 
 `--runstatedir=/run/blocklistd` compiles `_PATH_BLSOCK` to
@@ -84,10 +84,25 @@ The unit is `Type=simple` and starts `blocklistd -d -r`:
 - `StateDirectory=blocklistd` → `/var/lib/blocklistd` (db).
 - `ExecStart` passes `-s` / `-D` to those paths explicitly.
 
-There is **no** `blocklistd.socket`. `bl_create()` connect-probes the
-path then `bind()`s a `SOCK_DGRAM` `AF_UNIX`; an inherited `LISTEN_FDS`
-looks like another daemon already owns it. Copy racoon2's
-`RuntimeDirectory`, not `iked.socket` (that one exists to bind UDP/500).
+`blocklistd.socket` is the racoon2 `spmd.socket` analogue: systemd
+binds `ListenDatagram=/run/blocklistd/blocklistd.sock` and hands the
+fd to the service via `LISTEN_PID` / `LISTEN_FDS` (start at fd 3).
+`bl_create()` → `bl_init()` calls `bl_take_listen_fd()` (same idea as
+racoon2 `rc_take_listenfd()` in `lib/sd_listenfds.c`) and skips the
+connect-probe + `unlink`/`bind` when an inherited `SOCK_DGRAM`
+`AF_UNIX` matches the configured path. Without that skip, connect()
+on a bound datagram unix socket succeeds against ourselves and
+`bl_create(srv=true)` would abort with "another daemon is handling".
+
+Enable the socket unit so iked/sshd can `connect()` before `-r`
+restore finishes:
+
+```
+sudo systemctl enable --now blocklistd.socket blocklistd.service
+```
+
+`iked.socket` stays UDP/500+4500; this unit is only the control
+datagram.
 
 `PrivateTmp=yes` and `ProtectSystem=strict` are on. Do not set
 `PrivateUsers=` or `DynamicUser=`: the helper runs `nft` and needs the
