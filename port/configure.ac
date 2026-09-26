@@ -86,6 +86,21 @@ AC_CHECK_FUNCS(strerror)
 dnl Provide implementation of some required functions if necessary
 AC_REPLACE_FUNCS(strtoi sockaddr_snprintf popenve clock_gettime strlcpy strlcat getprogname fparseln fgetln pidfile vsyslog_r)
 
+dnl Packet-filter backend XOR (see LINUX.md).
+dnl auto: nft on Linux if present, else iptables, else BSD detection at runtime.
+AC_MSG_CHECKING([packet-filter backend])
+AC_ARG_WITH([pf-backend],
+	[AS_HELP_STRING([--with-pf-backend=auto|nft|iptables|npf|pf|ipfw|ipfilter],
+		[helper packet-filter engine; Linux default nft])],
+	[], [with_pf_backend=auto])
+case $with_pf_backend in
+	auto|nft|iptables|npf|pf|ipfw|ipfilter) ;;
+	*) AC_MSG_ERROR([unsupported --with-pf-backend=$with_pf_backend]) ;;
+esac
+AC_SUBST([PF_BACKEND], [$with_pf_backend])
+AC_DEFINE_UNQUOTED([PF_BACKEND], ["$with_pf_backend"], [Configured packet filter backend])
+AC_MSG_RESULT([$with_pf_backend])
+
 dnl See if we are cross-compiling
 AM_CONDITIONAL(IS_CROSS_COMPILE, test "$cross_compiling" = yes)
 

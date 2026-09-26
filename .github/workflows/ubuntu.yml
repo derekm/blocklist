@@ -1,0 +1,58 @@
+# Ubuntu CI for blocklist, modelled on derekm/racoon2 int/gsoc2026
+# ubuntu.yml: one job is the Linux default backend, one is compat.
+#
+#   build-nft      — --with-pf-backend=nft   (Linux default)
+#   build-iptables — --with-pf-backend=iptables (sanity only)
+# Cross-platform compile (the portable tree) is what both jobs run;
+# the XOR is only the helper default + example files.
+
+name: Ubuntu build
+
+on:
+  push:
+    branches: [linux-port, master]
+  pull_request:
+    branches: [linux-port, master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-nft:
+    name: 'Ubuntu nftables backend (default PF)'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq autoconf automake libtool pkg-config gcc make libdb-dev
+      - name: Bootstrap
+        run: (cd port && autoreconf -fi)
+      - name: Configure
+        run: (cd port && ./configure --prefix=/usr --sysconfdir=/etc --with-pf-backend=nft)
+      - name: Build
+        run: make -C port -j2
+      - name: Helper syntax
+        run: sh -n libexec/blocklistd-helper
+      - name: Binaries exist
+        run: test -x port/blocklistd && test -x port/blocklistctl && test -x port/.libs/blocklistd
+
+  build-iptables:
+    name: 'Ubuntu iptables backend (sanity only)'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq autoconf automake libtool pkg-config gcc make libdb-dev
+      - name: Bootstrap
+        run: (cd port && autoreconf -fi)
+      - name: Configure
+        run: (cd port && ./configure --prefix=/usr --sysconfdir=/etc --with-pf-backend=iptables)
+      - name: Build
+        run: make -C port -j2
+      - name: Helper syntax
+        run: sh -n libexec/blocklistd-helper

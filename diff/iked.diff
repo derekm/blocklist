@@ -1,0 +1,77 @@
+--- a/iked/blocklist_peer.c
++++ b/iked/blocklist_peer.c
+@@ -0,0 +1,47 @@
++/* Optional libblocklist glue for iked. See blocklist LINUX.md. */
++#ifdef HAVE_BLOCKLIST
++#include <sys/socket.h>
++#include <netinet/in.h>
++#include <blocklist.h>
++
++static struct blocklist *blstate;
++
++void
++iked_blocklist_init(void)
++{
++	if (blstate == NULL)
++		blstate = blocklist_open();
++}
++
++void
++iked_blocklist_peer(int action, const struct sockaddr *sa, const char *why)
++{
++	socklen_t slen;
++
++	if (blstate == NULL)
++		iked_blocklist_init();
++	if (blstate == NULL || sa == NULL)
++		return;
++	switch (sa->sa_family) {
++	case AF_INET:
++		slen = sizeof(struct sockaddr_in);
++		break;
++	case AF_INET6:
++		slen = sizeof(struct sockaddr_in6);
++		break;
++	default:
++		return;
++	}
++	(void)blocklist_sa_r(blstate, action, -1, sa, slen,
++	    why ? why : "iked");
++}
++#else
++void iked_blocklist_init(void) {}
++void iked_blocklist_peer(int action, const struct sockaddr *sa, const char *why)
++{
++	(void)action; (void)sa; (void)why;
++}
++#endif
+--- a/iked/isakmp.c
++++ b/iked/isakmp.c
+@@ -1081,6 +1081,8 @@
+ 		plog(PLOG_PROTOERR, PLOGLOC, 0,
+ 		     "packet (%d) shorter than isakmp header size. (%zu+%d)\n",
+ 		     len, sizeof(isakmp), extralen);
++		iked_blocklist_peer(BLOCKLIST_AUTH_FAIL,
++		    (struct sockaddr *)&remote, "iked shortpacket");
+ 		++isakmpstat.shortpacket;
+--- a/iked/ikev2_auth.c
++++ b/iked/ikev2_auth.c
+@@ -667,6 +667,8 @@
+ 	if (info->result == VERIFIED_FAILURE) {
+ 		isakmp_log(ike_sa, info->local, info->remote, info->packet,
+ 			   PLOG_PROTOERR, PLOGLOC, "authentication failure\n");
++		iked_blocklist_peer(BLOCKLIST_AUTH_FAIL,
++		    info->remote, "iked AUTH_FAILED");
+ 		++isakmpstat.authentication_failed;
+ 	} else if (info->result == VERIFIED_WAITING)
+--- a/iked/configure.ac
++++ b/iked/configure.ac
+@@ -0,0 +1,8 @@
++AC_ARG_ENABLE(blocklist,
++	[AS_HELP_STRING([--enable-blocklist],
++		[notify blocklistd of IKE scanners / AUTH failures])],
++	[], [enable_blocklist=no])
++AS_IF([test "x$enable_blocklist" = xyes],
++	[AC_CHECK_LIB([blocklist], [blocklist_sa_r],
++		[AC_DEFINE([HAVE_BLOCKLIST], [1], [libblocklist])
++		 LIBS="$LIBS -lblocklist"])])
