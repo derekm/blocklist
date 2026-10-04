@@ -1,16 +1,18 @@
-# Ubuntu CI for blocklist, modelled on derekm/racoon2 int/gsoc2026
-# ubuntu.yml: one job is the Linux default backend, one is compat.
+# Ubuntu CI build & test for the blocklist linux-port.
+# nftables is the native Linux backend: build + compiled-path asserts +
+# DESTDIR install + header-only consumer (ci/build.sh), a daemon/library
+# smoke through a fake helper (ci/smoke.sh), and the real nft helper
+# against a ruleset inside a throwaway network namespace
+# (ci/nft-helper.sh).  The iptables leg is build sanity only.
 #
-#   build-nft      — --with-pf-backend=nft   (Linux default)
-#   build-iptables — --with-pf-backend=iptables (sanity only)
-# Cross-platform compile (the portable tree) is what both jobs run;
-# the XOR is only the helper default + example files.
+# The build/smoke bodies live in ci/ and are shared with the Fedora,
+# FreeBSD and NetBSD workflows so every OS tests the same thing.
 
 name: Ubuntu build
 
 on:
   push:
-    branches: [linux-port, master]
+    branches: [linux-port, master, 'ci/**']
   pull_request:
     branches: [linux-port, master]
   workflow_dispatch:
@@ -20,52 +22,63 @@ permissions:
 
 jobs:
   build-nft:
-    name: 'Ubuntu nftables backend (default PF)'
+    name: 'Ubuntu nftables build & test (runstatedir /run/blocklistd)'
     runs-on: ubuntu-latest
+    env:
+      BL_PF_BACKEND: nft
+      BL_PREFIX: /usr
+      BL_RUNSTATEDIR: /run/blocklistd
+      BL_EXPECT_SOCK: /run/blocklistd/blocklistd.sock
+      BL_EXPECT_SYSTEMD: 'yes'
     steps:
       - uses: actions/checkout@v4
       - name: Install build dependencies
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y -qq autoconf automake libtool pkg-config gcc make libdb-dev
-      - name: Bootstrap
-        run: (cd port && autoreconf -fi)
-      - name: Configure
-        run: |
-          cd port && ./configure --prefix=/usr --sysconfdir=/etc \
-            --runstatedir=/run/blocklistd --with-pf-backend=nft
-      - name: Build
-        run: make -C port -j2
-      - name: Helper syntax
-        run: sh -n libexec/blocklistd-helper
-      - name: Binaries exist
-        run: test -x port/blocklistd && test -x port/blocklistctl && test -x port/.libs/blocklistd
+          sudo apt-get install -y -qq autoconf automake libtool pkg-config gcc make libdb-dev nftables
+      - name: 'Build, path asserts, install, consumer (ci/build.sh)'
+        run: sh ci/build.sh
       - name: Units use RuntimeDirectory + ListenDatagram socket
         run: |
           grep -q '^RuntimeDirectory=blocklistd' etc/systemd/blocklistd.service
           grep -q '^StateDirectory=blocklistd' etc/systemd/blocklistd.service
           grep -q '^Requires=blocklistd.socket' etc/systemd/blocklistd.service
           grep -q '^Also=blocklistd.socket' etc/systemd/blocklistd.service
-          grep -q -- '-d -r -s /run/blocklistd/blocklistd.sock' etc/systemd/blocklistd.service
+          grep -q -- "-d -r -s $BL_EXPECT_SOCK" etc/systemd/blocklistd.service
           ! grep -q '/var/db' etc/systemd/blocklistd.service
-          grep -q '^ListenDatagram=/run/blocklistd/blocklistd.sock' etc/systemd/blocklistd.socket
+          grep -q "^ListenDatagram=$BL_EXPECT_SOCK" etc/systemd/blocklistd.socket
           grep -q 'bl_take_listen_fd' lib/bl.c
           grep -q 'LISTEN_FDS' lib/bl.c
+      - name: 'Daemon + library smoke, fake helper (ci/smoke.sh)'
+        run: sudo -E sh ci/smoke.sh
+      - name: 'nft helper in a throwaway netns (ci/nft-helper.sh)'
+        run: |
+          sudo ip netns add blci
+          sudo -E ip netns exec blci sh ci/nft-helper.sh
+          sudo ip netns del blci
+      - name: Upload CI logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: blocklist-ubuntu-nft-logs
+          path: ci-logs/
+          overwrite: true
+          if-no-files-found: warn
 
   build-iptables:
     name: 'Ubuntu iptables backend (sanity only)'
     runs-on: ubuntu-latest
+    env:
+      BL_PF_BACKEND: iptables
+      BL_PREFIX: /usr
+      BL_RUNSTATEDIR: /run/blocklistd
+      BL_EXPECT_SOCK: /run/blocklistd/blocklistd.sock
+      BL_EXPECT_SYSTEMD: 'yes'
     steps:
       - uses: actions/checkout@v4
       - name: Install build dependencies
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y -qq autoconf automake libtool pkg-config gcc make libdb-dev
-      - name: Bootstrap
-        run: (cd port && autoreconf -fi)
-      - name: Configure
-        run: (cd port && ./configure --prefix=/usr --sysconfdir=/etc --runstatedir=/run/blocklistd --with-pf-backend=iptables)
-      - name: Build
-        run: make -C port -j2
-      - name: Helper syntax
-        run: sh -n libexec/blocklistd-helper
+      - name: 'Build, path asserts, install, consumer (ci/build.sh)'
+        run: sh ci/build.sh
