@@ -83,14 +83,15 @@ esac
 
 nft_elem()
 {
+	set=banned4
+	hostmask=32
+	case "$addr" in
+	*:*) set=banned6; hostmask=128 ;;
+	esac
 	elem="$addr"
-	if [ -n "$mask" ] && [ "$mask" != 32 ] && [ "$mask" != 128 ]; then
+	if [ -n "$mask" ] && [ "$mask" != "$hostmask" ]; then
 		elem="$addr/$mask"
 	fi
-	set=banned4
-	case "$addr" in
-	*:*) set=banned6 ;;
-	esac
 	if [ -z "$nftcmd" ]; then
 		nftcmd=nft
 	fi
@@ -116,9 +117,13 @@ add)
 		;;
 	nft)
 		nft_elem
-		$nftcmd list table inet blocklistd >/dev/null 2>&1 || \
-			$nftcmd -f /usr/share/examples/blocklistd/blocklistd.nft \
-			2>/dev/null || true
+		if ! $nftcmd list table inet blocklistd >/dev/null 2>&1; then
+			for t in /etc/nftables/blocklistd.nft \
+			    /usr/share/examples/blocklistd.nft \
+			    /usr/share/examples/blocklistd/blocklistd.nft; do
+				[ -f "$t" ] && $nftcmd -f "$t" 2>/dev/null && break
+			done
+		fi
 		$nftcmd add element inet blocklistd "$set" "{ $elem }" && echo OK
 		;;
 	iptables)

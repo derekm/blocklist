@@ -13,6 +13,9 @@ Type=simple
 # bl_create() takes it and skips the connect-probe/bind.
 RuntimeDirectory=blocklistd
 RuntimeDirectoryMode=0755
+# blocklistd.socket owns /run/blocklistd/blocklistd.sock; without this a
+# service stop/restart removes the directory and the socket path with it.
+RuntimeDirectoryPreserve=yes
 StateDirectory=blocklistd
 StateDirectoryMode=0750
 ExecStartPre=/bin/sh -c 'command -v nft >/dev/null && nft list table inet blocklistd >/dev/null 2>&1 || nft -f /usr/share/examples/blocklistd.nft || true'

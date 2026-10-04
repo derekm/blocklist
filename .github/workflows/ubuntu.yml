@@ -64,7 +64,7 @@ jobs:
       - name: Bootstrap
         run: (cd port && autoreconf -fi)
       - name: Configure
-        run: (cd port && ./configure --prefix=/usr --sysconfdir=/etc --with-pf-backend=iptables)
+        run: (cd port && ./configure --prefix=/usr --sysconfdir=/etc --runstatedir=/run/blocklistd --with-pf-backend=iptables)
       - name: Build
         run: make -C port -j2
       - name: Helper syntax
