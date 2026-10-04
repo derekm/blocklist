@@ -6,9 +6,10 @@ include_HEADERS = $(srcdir)/../include/blocklist.h
 exampledir = $(datarootdir)/examples
 example_DATA = $(srcdir)/../etc/blocklistd.conf $(srcdir)/../etc/npf.conf $(srcdir)/../etc/ipf.conf \
 	$(srcdir)/../etc/blocklistd.conf.linux $(srcdir)/../etc/nftables/blocklistd.nft
-systemdsystemunitdir = /lib/systemd/system
+if INSTALL_SYSTEMD_UNITS
 dist_systemdsystemunit_DATA = $(srcdir)/../etc/systemd/blocklistd.service \
 	$(srcdir)/../etc/systemd/blocklistd.socket
+endif
 
 sbin_PROGRAMS = blocklistd blocklistctl
 noinst_PROGRAMS = srvtest cltest

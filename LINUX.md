@@ -75,6 +75,10 @@ sudo systemctl enable --now blocklistd.socket blocklistd.service
 `/run/blocklistd/blocklistd.sock` so `libblocklist` (iked, sshd, …)
 matches the unit. Do not leave clients on `/run/blocklistd.sock`.
 
+The units go to `/lib/systemd/system` on Linux hosts only; override
+with `--with-systemdsystemunitdir=DIR` (e.g. `/usr/lib/systemd/system`
+on Fedora) or disable with `=no`. FreeBSD/NetBSD builds install none.
+
 The unit is `Type=simple` and starts `blocklistd -d -r`:
 
 - `-d` stays in the foreground (no `daemon(0,0)` / pidfile). Required

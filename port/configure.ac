@@ -101,6 +101,23 @@ AC_SUBST([PF_BACKEND], [$with_pf_backend])
 AC_DEFINE_UNQUOTED([PF_BACKEND], ["$with_pf_backend"], [Configured packet filter backend])
 AC_MSG_RESULT([$with_pf_backend])
 
+dnl systemd units (etc/systemd) are for Linux; FreeBSD/NetBSD use rc.d.
+AC_MSG_CHECKING([systemd unit directory])
+AC_ARG_WITH([systemdsystemunitdir],
+	[AS_HELP_STRING([--with-systemdsystemunitdir=DIR|no],
+		[install blocklistd.service/.socket in DIR; default
+		 /lib/systemd/system on Linux, no elsewhere])],
+	[], [case $host_os in
+		linux*) with_systemdsystemunitdir=/lib/systemd/system ;;
+		*) with_systemdsystemunitdir=no ;;
+	esac])
+AS_IF([test "x$with_systemdsystemunitdir" = xyes],
+	[with_systemdsystemunitdir=/lib/systemd/system])
+AC_SUBST([systemdsystemunitdir], [$with_systemdsystemunitdir])
+AM_CONDITIONAL([INSTALL_SYSTEMD_UNITS],
+	[test "x$with_systemdsystemunitdir" != xno])
+AC_MSG_RESULT([$with_systemdsystemunitdir])
+
 dnl See if we are cross-compiling
 AM_CONDITIONAL(IS_CROSS_COMPILE, test "$cross_compiling" = yes)
 
