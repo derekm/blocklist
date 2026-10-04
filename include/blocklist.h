@@ -32,6 +32,7 @@
 #define _BLOCKLIST_H
 
 #include <sys/socket.h>
+#include <stdarg.h>
 #include <syslog.h>
 
 #if defined(__cplusplus)
