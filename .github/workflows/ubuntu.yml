@@ -1,14 +1,14 @@
-# Ubuntu CI build & test for the blocklist linux-port.
+# Ubuntu build & test for the blocklist linux-port.
 # nftables is the native Linux backend: build + compiled-path asserts +
 # DESTDIR install + header-only consumer (ci/build.sh), a daemon/library
 # smoke through a fake helper (ci/smoke.sh), and the real nft helper
 # against a ruleset inside a throwaway network namespace
-# (ci/nft-helper.sh).  The iptables leg is build sanity only.
+# (ci/nft-helper.sh).  The iptables leg runs ci/build.sh only.
 #
 # The build/smoke bodies live in ci/ and are shared with the Fedora,
 # FreeBSD and NetBSD workflows so every OS tests the same thing.
 
-name: Ubuntu build
+name: Ubuntu build & test (nftables, iptables)
 
 on:
   push:
@@ -21,8 +21,8 @@ permissions:
   contents: read
 
 jobs:
-  build-nft:
-    name: 'Ubuntu nftables build & test (runstatedir /run/blocklistd)'
+  ubuntu-nftables:
+    name: 'Ubuntu latest build & test (nftables)'
     runs-on: ubuntu-latest
     env:
       BL_PF_BACKEND: nft
@@ -31,14 +31,19 @@ jobs:
       BL_EXPECT_SOCK: /run/blocklistd/blocklistd.sock
       BL_EXPECT_SYSTEMD: 'yes'
     steps:
-      - uses: actions/checkout@v4
-      - name: Install build dependencies
+
+      - name: 'Checkout repository'
+        uses: actions/checkout@v4
+
+      - name: 'Install build dependencies'
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y -qq autoconf automake libtool pkg-config gcc make libdb-dev nftables
+
       - name: 'Build, path asserts, install, consumer (ci/build.sh)'
         run: sh ci/build.sh
-      - name: Units use RuntimeDirectory + ListenDatagram socket
+
+      - name: 'Units use RuntimeDirectory + ListenDatagram socket'
         run: |
           grep -q '^RuntimeDirectory=blocklistd' etc/systemd/blocklistd.service
           grep -q '^StateDirectory=blocklistd' etc/systemd/blocklistd.service
@@ -49,24 +54,27 @@ jobs:
           grep -q "^ListenDatagram=$BL_EXPECT_SOCK" etc/systemd/blocklistd.socket
           grep -q 'bl_take_listen_fd' lib/bl.c
           grep -q 'LISTEN_FDS' lib/bl.c
+
       - name: 'Daemon + library smoke, fake helper (ci/smoke.sh)'
         run: sudo -E sh ci/smoke.sh
+
       - name: 'nft helper in a throwaway netns (ci/nft-helper.sh)'
         run: |
           sudo ip netns add blci
           sudo -E ip netns exec blci sh ci/nft-helper.sh
           sudo ip netns del blci
-      - name: Upload CI logs
+
+      - name: 'Upload CI logs'
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: blocklist-ubuntu-nft-logs
+          name: ci-logs-ubuntu-latest-nftables
           path: ci-logs/
           overwrite: true
           if-no-files-found: warn
 
-  build-iptables:
-    name: 'Ubuntu iptables backend (sanity only)'
+  ubuntu-iptables:
+    name: 'Ubuntu latest build & test (iptables)'
     runs-on: ubuntu-latest
     env:
       BL_PF_BACKEND: iptables
@@ -75,10 +83,23 @@ jobs:
       BL_EXPECT_SOCK: /run/blocklistd/blocklistd.sock
       BL_EXPECT_SYSTEMD: 'yes'
     steps:
-      - uses: actions/checkout@v4
-      - name: Install build dependencies
+
+      - name: 'Checkout repository'
+        uses: actions/checkout@v4
+
+      - name: 'Install build dependencies'
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y -qq autoconf automake libtool pkg-config gcc make libdb-dev
+
       - name: 'Build, path asserts, install, consumer (ci/build.sh)'
         run: sh ci/build.sh
+
+      - name: 'Upload CI logs'
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ci-logs-ubuntu-latest-iptables
+          path: ci-logs/
+          overwrite: true
+          if-no-files-found: warn

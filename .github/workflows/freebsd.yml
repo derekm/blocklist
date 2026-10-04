@@ -1,4 +1,4 @@
-# FreeBSD CI build & test for the blocklist linux-port.
+# FreeBSD build & test for the blocklist linux-port (FreeBSD 15.1).
 # FreeBSD 15.1 via vmactions/freebsd-vm (same runner, release and VM size
 # as racoon2's FreeBSD workflow).  Native BSD layout: --prefix=/usr/local,
 # autoconf-default runstatedir, so the socket is /var/run/blocklistd.sock
@@ -24,17 +24,17 @@ permissions:
   contents: read
 
 jobs:
-  freebsd-build-test:
-    name: 'FreeBSD 15.1 build & test (pf backend) [vmactions]'
+  freebsd-pf:
+    name: 'FreeBSD 15.1 build & test (pf)'
     runs-on: ubuntu-latest
     # Bound a hung VM boot/SSH session (a normal run is ~10 min).
     timeout-minutes: 45
 
     steps:
-      - name: Checkout repository
+      - name: 'Checkout repository'
         uses: actions/checkout@v4
 
-      - name: Build and test on FreeBSD 15.1
+      - name: 'Build and test in FreeBSD 15.1 VM (ci/bsd-vm.sh)'
         uses: vmactions/freebsd-vm@v1
         with:
           release: "15.1"
@@ -48,16 +48,16 @@ jobs:
             BL_PF_BACKEND=pf BL_EXPECT_SOCK=/var/run/blocklistd.sock \
               BL_EXPECT_SYSTEMD=no sh ci/bsd-vm.sh
 
-      - name: Upload CI logs
+      - name: 'Upload CI logs'
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: blocklist-freebsd151-logs
+          name: ci-logs-freebsd-15.1-pf
           path: ci-logs/
           overwrite: true
           if-no-files-found: warn
 
-      - name: Fail on in-VM build/smoke failure
+      - name: 'Fail on in-VM build/smoke failure'
         if: always()
         run: |
           rc=$(cat ci-logs/rc 2>/dev/null || echo missing)

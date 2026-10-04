@@ -1,5 +1,5 @@
-# NetBSD CI build & test for the blocklist linux-port (blocklistd's home
-# platform).  NetBSD 10.1, 10.2 and 11.0 via vmactions/netbsd-vm - the
+# NetBSD build & test for the blocklist linux-port (NetBSD 10.1, 10.2,
+# 11.0; blocklistd's home platform), all via vmactions/netbsd-vm - the
 # same releases, runner and VM size as racoon2's NetBSD workflow, which
 # moved its 10.1 leg off cross-platform-actions because that plain-QEMU
 # boot intermittently hung on SSH.  Native layout: --prefix=/usr/local,
@@ -25,8 +25,8 @@ permissions:
   contents: read
 
 jobs:
-  netbsd-build-test:
-    name: 'NetBSD ${{ matrix.release }} build & test (npf backend) [vmactions]'
+  netbsd-npf:
+    name: 'NetBSD ${{ matrix.release }} build & test (npf)'
     runs-on: ubuntu-latest
     # Bound a hung VM boot/SSH session (a normal run is ~10 min).
     timeout-minutes: 45
@@ -36,14 +36,14 @@ jobs:
         release: ["10.1", "10.2", "11.0"]
 
     steps:
-      - name: Checkout repository
+      - name: 'Checkout repository'
         uses: actions/checkout@v4
 
       # The in-VM script always exits 0 (see below), so this step can only
       # fail on VM infrastructure (boot/SSH/rsync).  Allow one fresh-VM
       # retry for that case; a real build/smoke failure is gated by the
       # recorded rc, not by this step.
-      - name: Build and test on NetBSD ${{ matrix.release }}
+      - name: 'Build and test in NetBSD ${{ matrix.release }} VM (ci/bsd-vm.sh)'
         id: vm
         continue-on-error: true
         uses: vmactions/netbsd-vm@v1
@@ -59,7 +59,7 @@ jobs:
             BL_PF_BACKEND=npf BL_EXPECT_SOCK=/var/run/blocklistd.sock \
               BL_EXPECT_SYSTEMD=no sh ci/bsd-vm.sh
 
-      - name: Retry on NetBSD ${{ matrix.release }} (VM infrastructure failure)
+      - name: 'Retry in a fresh NetBSD ${{ matrix.release }} VM (VM infrastructure failure)'
         if: steps.vm.outcome == 'failure'
         uses: vmactions/netbsd-vm@v1
         with:
@@ -74,16 +74,16 @@ jobs:
             BL_PF_BACKEND=npf BL_EXPECT_SOCK=/var/run/blocklistd.sock \
               BL_EXPECT_SYSTEMD=no sh ci/bsd-vm.sh
 
-      - name: Upload CI logs
+      - name: 'Upload CI logs'
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: blocklist-netbsd-${{ matrix.release }}-logs
+          name: ci-logs-netbsd-${{ matrix.release }}-npf
           path: ci-logs/
           overwrite: true
           if-no-files-found: warn
 
-      - name: Fail on in-VM build/smoke failure
+      - name: 'Fail on in-VM build/smoke failure'
         if: always()
         run: |
           rc=$(cat ci-logs/rc 2>/dev/null || echo missing)

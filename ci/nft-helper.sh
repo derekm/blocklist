@@ -1,8 +1,8 @@
 #!/bin/sh
 # ci/nft-helper.sh - exercise libexec/blocklistd-helper against a real
 # nftables ruleset.  Must run as root INSIDE a throwaway network
-# namespace (the Ubuntu job does `ip netns exec`), so the runner's own
-# firewall is never touched.  Covers the native Linux backend: v4/v6
+# namespace (the Ubuntu nftables job does `ip netns exec`), so the
+# runner's own firewall is never touched.  Covers the native Linux backend: v4/v6
 # host entries, a v4 prefix, IPv4-mapped IPv6, rem and flush.
 set -eu
 TOP=$(pwd)

@@ -50,7 +50,7 @@ This branch makes the packet-filter backend an explicit XOR too:
 | Linux-only backend | `lib/if_xfrm.c` | nftables sets in `blocklistd-helper` + `etc/nftables/blocklistd.nft` |
 | Compat backend | Linux `AF_KEY` pfkey | iptables chain (existing stub, not the default) |
 | Init | systemd units + `RuntimeDirectory` | `etc/systemd/blocklistd.service` + `blocklistd.socket` |
-| CI | Ubuntu xfrm + pfkey jobs | Ubuntu nft + iptables jobs |
+| CI | Ubuntu xfrm + pfkey jobs | Ubuntu nftables + iptables jobs, plus Fedora/FreeBSD/NetBSD (see CI below) |
 | What is *not* XOR'd | IKE parser, admin socket | `libblocklist`, `blocklistd`, `blocklistctl`, `blocklistd.conf` |
 
 The helper still contains the BSD engines so a single script ships
@@ -111,6 +111,26 @@ datagram.
 `PrivateTmp=yes` and `ProtectSystem=strict` are on. Do not set
 `PrivateUsers=` or `DynamicUser=`: the helper runs `nft` and needs the
 host net ns plus `CAP_NET_ADMIN`.
+
+## CI
+
+One workflow per OS, `.github/workflows/<os>.yml`, all named
+`<OS> build & test (<backend>)`; jobs are
+`<OS> <release> build & test (<backend>)`. Each runs the shared
+`ci/build.sh` (build, compiled-in socket path, DESTDIR install,
+header-only consumer) and `ci/smoke.sh` (srvtest/cltest -> blocklistd
+with a fake helper -> blocklistctl; no packet filter touched).
+
+| Workflow file | Workflow name | Jobs |
+|---------------|---------------|------|
+| `ubuntu.yml` | Ubuntu build & test (nftables, iptables) | Ubuntu latest build & test (nftables) - also `ci/nft-helper.sh` against real nft sets in a throwaway netns; Ubuntu latest build & test (iptables) - `ci/build.sh` only |
+| `fedora.yml` | Fedora build & test (nftables) | Fedora 44 build & test (nftables) |
+| `freebsd.yml` | FreeBSD build & test (pf) | FreeBSD 15.1 build & test (pf) |
+| `netbsd.yml` | NetBSD build & test (npf) | NetBSD 10.1 / 10.2 / 11.0 build & test (npf) |
+
+Linux jobs use `--runstatedir=/run/blocklistd`; the BSD jobs use the
+native `/usr/local` prefix and `/var/run/blocklistd.sock` and must not
+install systemd units.
 
 ## Helper contract (unchanged)
 
