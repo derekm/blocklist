@@ -1,0 +1,69 @@
+# FreeBSD CI build & test for the blocklist linux-port.
+# FreeBSD 15.1 via vmactions/freebsd-vm (same runner, release and VM size
+# as racoon2's FreeBSD workflow).  Native BSD layout: --prefix=/usr/local,
+# autoconf-default runstatedir, so the socket is /var/run/blocklistd.sock
+# like FreeBSD's base blocklistd/rc.d; pf is the configured backend (the
+# helper still detects pf/ipfw/ipf at runtime).  No systemd units may be
+# installed.  Build + path asserts + DESTDIR install + header-only
+# consumer, then the daemon/library smoke with a fake helper: the VM's
+# packet filter is never touched.
+#
+# The in-VM body is ci/bsd-vm.sh (deps + the same ci/build.sh and
+# ci/smoke.sh the Linux legs run).
+
+name: FreeBSD build & test (pf)
+
+on:
+  push:
+    branches: [linux-port, master, 'ci/**']
+  pull_request:
+    branches: [linux-port, master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  freebsd-build-test:
+    name: 'FreeBSD 15.1 build & test (pf backend) [vmactions]'
+    runs-on: ubuntu-latest
+    # Bound a hung VM boot/SSH session (a normal run is ~10 min).
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Build and test on FreeBSD 15.1
+        uses: vmactions/freebsd-vm@v1
+        with:
+          release: "15.1"
+          mem: 4096
+          cpu: 2
+          run: |
+            set -eu
+            # ci/bsd-vm.sh logs to ci-logs/ in the synced workspace and
+            # always exits 0 so vmactions copies the logs back; the
+            # "Fail on ..." step below gates on ci-logs/rc.
+            BL_PF_BACKEND=pf BL_EXPECT_SOCK=/var/run/blocklistd.sock \
+              BL_EXPECT_SYSTEMD=no sh ci/bsd-vm.sh
+
+      - name: Upload CI logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: blocklist-freebsd151-logs
+          path: ci-logs/
+          overwrite: true
+          if-no-files-found: warn
+
+      - name: Fail on in-VM build/smoke failure
+        if: always()
+        run: |
+          rc=$(cat ci-logs/rc 2>/dev/null || echo missing)
+          if [ "$rc" != 0 ]; then
+            echo "::error::FreeBSD 15.1 build/smoke rc=$rc (see ci-logs/vm.log artifact)"
+            tail -n 60 ci-logs/vm.log 2>/dev/null || true
+            exit 1
+          fi
+          echo "FreeBSD 15.1: build + smoke passed"

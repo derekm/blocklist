@@ -1,0 +1,58 @@
+# Fedora 44 CI build & test for the blocklist linux-port.
+# Same shape as racoon2's Fedora 44 workflow: plain ubuntu-latest runner
+# with a fedora:44 container (root, no sudo), deps via dnf.  nftables is
+# the native backend; Fedora's libdb provides the db185 compat API.
+# Build + compiled-path asserts + DESTDIR install + header-only consumer
+# (ci/build.sh) and the daemon/library smoke with a fake helper
+# (ci/smoke.sh).  The container cannot create network namespaces, so the
+# real-nft helper test stays on the Ubuntu leg.
+
+name: Fedora 44 build & test (nftables)
+
+on:
+  push:
+    branches: [linux-port, master, 'ci/**']
+  pull_request:
+    branches: [linux-port, master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  fedora44-nft:
+    name: 'Fedora 44 nftables build & test (runstatedir /run/blocklistd)'
+    runs-on: ubuntu-latest
+    container: fedora:44
+    env:
+      BL_PF_BACKEND: nft
+      BL_PREFIX: /usr
+      BL_RUNSTATEDIR: /run/blocklistd
+      BL_EXPECT_SOCK: /run/blocklistd/blocklistd.sock
+      BL_EXPECT_SYSTEMD: 'yes'
+      # Fedora's unit dir; exercises --with-systemdsystemunitdir
+      BL_CONFIGURE_EXTRA: --with-systemdsystemunitdir=/usr/lib/systemd/system
+
+    steps:
+      - name: Install build dependencies
+        run: |
+          dnf install -y -q autoconf automake libtool make gcc \
+            libdb-devel findutils procps-ng git
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: 'Build, path asserts, install, consumer (ci/build.sh)'
+        run: sh ci/build.sh
+
+      - name: 'Daemon + library smoke, fake helper (ci/smoke.sh)'
+        run: sh ci/smoke.sh
+
+      - name: Upload CI logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: blocklist-fedora44-logs
+          path: ci-logs/
+          overwrite: true
+          if-no-files-found: warn

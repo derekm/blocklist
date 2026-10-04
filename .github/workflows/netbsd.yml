@@ -1,0 +1,95 @@
+# NetBSD CI build & test for the blocklist linux-port (blocklistd's home
+# platform).  NetBSD 10.1, 10.2 and 11.0 via vmactions/netbsd-vm - the
+# same releases, runner and VM size as racoon2's NetBSD workflow, which
+# moved its 10.1 leg off cross-platform-actions because that plain-QEMU
+# boot intermittently hung on SSH.  Native layout: --prefix=/usr/local,
+# autoconf-default runstatedir, so the socket is /var/run/blocklistd.sock
+# as in NetBSD base; npf is the configured backend.  No systemd units may
+# be installed.  Build + path asserts + DESTDIR install + header-only
+# consumer, then the daemon/library smoke with a fake helper: npf is
+# never touched.
+#
+# The in-VM body is ci/bsd-vm.sh (deps + the same ci/build.sh and
+# ci/smoke.sh the Linux legs run), shared by all three legs.
+
+name: NetBSD build & test (npf)
+
+on:
+  push:
+    branches: [linux-port, master, 'ci/**']
+  pull_request:
+    branches: [linux-port, master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  netbsd-build-test:
+    name: 'NetBSD ${{ matrix.release }} build & test (npf backend) [vmactions]'
+    runs-on: ubuntu-latest
+    # Bound a hung VM boot/SSH session (a normal run is ~10 min).
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        release: ["10.1", "10.2", "11.0"]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # The in-VM script always exits 0 (see below), so this step can only
+      # fail on VM infrastructure (boot/SSH/rsync).  Allow one fresh-VM
+      # retry for that case; a real build/smoke failure is gated by the
+      # recorded rc, not by this step.
+      - name: Build and test on NetBSD ${{ matrix.release }}
+        id: vm
+        continue-on-error: true
+        uses: vmactions/netbsd-vm@v1
+        with:
+          release: ${{ matrix.release }}
+          mem: 4096
+          cpu: 2
+          run: |
+            set -eu
+            # ci/bsd-vm.sh logs to ci-logs/ in the synced workspace and
+            # always exits 0 so vmactions copies the logs back; the
+            # "Fail on ..." step below gates on ci-logs/rc.
+            BL_PF_BACKEND=npf BL_EXPECT_SOCK=/var/run/blocklistd.sock \
+              BL_EXPECT_SYSTEMD=no sh ci/bsd-vm.sh
+
+      - name: Retry on NetBSD ${{ matrix.release }} (VM infrastructure failure)
+        if: steps.vm.outcome == 'failure'
+        uses: vmactions/netbsd-vm@v1
+        with:
+          release: ${{ matrix.release }}
+          mem: 4096
+          cpu: 2
+          run: |
+            set -eu
+            # ci/bsd-vm.sh logs to ci-logs/ in the synced workspace and
+            # always exits 0 so vmactions copies the logs back; the
+            # "Fail on ..." step below gates on ci-logs/rc.
+            BL_PF_BACKEND=npf BL_EXPECT_SOCK=/var/run/blocklistd.sock \
+              BL_EXPECT_SYSTEMD=no sh ci/bsd-vm.sh
+
+      - name: Upload CI logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: blocklist-netbsd-${{ matrix.release }}-logs
+          path: ci-logs/
+          overwrite: true
+          if-no-files-found: warn
+
+      - name: Fail on in-VM build/smoke failure
+        if: always()
+        run: |
+          rc=$(cat ci-logs/rc 2>/dev/null || echo missing)
+          if [ "$rc" != 0 ]; then
+            echo "::error::NetBSD ${{ matrix.release }} build/smoke rc=$rc (see ci-logs/vm.log artifact)"
+            tail -n 60 ci-logs/vm.log 2>/dev/null || true
+            exit 1
+          fi
+          echo "NetBSD ${{ matrix.release }}: build + smoke passed"
