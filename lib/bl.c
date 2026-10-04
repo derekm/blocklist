@@ -64,7 +64,6 @@ __RCSID("$NetBSD: bl.c,v 1.9 2025/03/30 01:53:59 christos Exp $");
 #endif
 
 #include "bl.h"
-#include "bl_listen.h"
 
 typedef struct {
 	uint32_t bl_len;
@@ -96,6 +95,9 @@ struct blocklist {
 };
 
 #define BL_VERSION	1
+
+/* needs the complete struct blocklist definition above */
+#include "bl_listen.h"
 
 bool
 bl_isconnected(bl_t b)
